@@ -1,1 +1,1 @@
-Picksy is a K-12 open-source rhythm-assistive device designed to simplify rhythm learning by focusing on kinesthetic perception
+Picksy is a K-12 open-source rhythm-assistive device designed to simplify rhythm learning by focusing on kinesthetic perception.
