@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Picksy</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Left Panel -->
+        <div class="panel left-panel">
+            <!-- Header -->
+            <div class="header">
+                <h1 class="logo">Picksy</h1>
+                <div class="counter">34</div>
+            </div>
+            
+            <!-- Waveform -->
+            <div class="waveform">
+                <div class="grid"></div>
+                <div class="mic-info">
+                    <span class="label">Mic value:</span>
+                    <span class="value">323457</span>
+                </div>
+            </div>
+            
+            <!-- Level -->
+            <div class="level">
+                <span class="level-text">Your level</span>
+                <span class="level-value">4/5</span>
+            </div>
+            
+            <!-- Attempt History -->
+            <div class="attempts-container">
+                <div class="attempts-history">
+                    <h3>Attempts</h3>
+                    <ul>
+                        <li>Level 1: %68</li>
+                        <li>Level 1: %97</li>
+                        <li>Level 2: %72</li>
+                        <li>Level 2: %94</li>
+                        <li>Level 3: %47</li>
+                        <li>Level 3: %65</li>
+                        <li>Level 3: %68</li>
+                        <li>Level 3: %81</li>
+                        <li>Level 4: %49</li>
+                        <li>Level 4: %54</li>
+                    </ul>
+                </div>
+                
+                <!-- Current Attempt -->
+                <div class="current-attempt">
+                    <h3>Current attempt</h3>
+                    <div class="rating-buttons">
+                        <button class="thumb-up" aria-label="Thumbs up">
+                            👍
+                        </button>
+                        <button class="thumb-down" aria-label="Thumbs down">
+                            👎
+                        </button>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress"></div>
+                    </div>
+                    <div class="trophy">🏆</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Right Panel -->
+        <div class="panel right-panel">
+            <!-- Mascot -->
+            <div class="mascot-container">
+                <img src="picksy.png" alt="Picksy mascot" class="mascot">
+                <div class="chat-bubble">
+                    <p>How can I help you with your rhythm practice?</p>
+                </div>
+            </div>
+            
+            <!-- Input -->
+            <div class="chat-input">
+                <div class="history" id="chat-history">
+                    <div class="message system">Welcome to Picksy</div>
+                    <div class="message system">I'll help you learn rhythm patterns</div>
+                    <div class="message system">Make some sounds to get started</div>
+                </div>
+                <div class="input-container">
+                    <input type="text" id="user-input" placeholder="Type a message...">
+                    <button class="send-button">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
