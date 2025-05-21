@@ -1,5 +1,9 @@
-// app.js - Enhanced main application code for Picksy rhythm feedback app
+// app.js - Enhanced main application code for Picksy rhythm feedback app with original UI
+
 let isProcessing = false;
+let awaitingResponse = false;
+let typingTimer = null;
+let conversationMode = false; // Track when we're in an active back-and-forth conversation
 
 document.addEventListener('DOMContentLoaded', function() {
   initializeApp();
@@ -9,6 +13,8 @@ document.addEventListener('DOMContentLoaded', function() {
  * Initialize the application
  */
 function initializeApp() {
+  console.log("Initializing Picksy app...");
+  
   // Set up chat interface
   setupChatInterface();
   
@@ -21,16 +27,218 @@ function initializeApp() {
   // Initialize AI model in the background
   initializeAI();
   
+  // Add conversation controls
+  addConversationControls();
+  
+  // Set up audio input if available
+  setupMicrophoneInput();
+  
   // Show welcome message after a brief delay
   setTimeout(() => {
-    showMascotMessage("Hi! I'm Picksy! Ask me for feedback on your rhythm practice, and I'll help you improve!");
+    showMascotMessage("Hi! I'm Picksy! Ask me anything about rhythm, timing, or music practice!");
   }, 500);
+}
+
+/**
+ * Add conversation controls to the UI
+ */
+function addConversationControls() {
+  // Create container for conversation controls
+  const controlsContainer = document.createElement('div');
+  controlsContainer.className = 'conversation-controls';
+  controlsContainer.style.display = 'flex';
+  controlsContainer.style.justifyContent = 'center';
+  controlsContainer.style.margin = '10px 0';
+  
+  // Create clear conversation button
+  const clearButton = document.createElement('button');
+  clearButton.className = 'clear-conversation';
+  clearButton.textContent = 'Clear Conversation';
+  clearButton.style.background = '#fff';
+  clearButton.style.border = '2px solid var(--purple-light)';
+  clearButton.style.borderRadius = '20px';
+  clearButton.style.padding = '5px 15px';
+  clearButton.style.fontSize = '14px';
+  clearButton.style.color = 'var(--purple-dark)';
+  clearButton.style.cursor = 'pointer';
+  clearButton.style.transition = 'all 0.2s ease';
+  
+  clearButton.addEventListener('mouseover', () => {
+    clearButton.style.background = 'var(--purple-light)';
+    clearButton.style.color = 'white';
+    clearButton.style.transform = 'translateY(-2px)';
+  });
+  
+  clearButton.addEventListener('mouseout', () => {
+    clearButton.style.background = '#fff';
+    clearButton.style.color = 'var(--purple-dark)';
+    clearButton.style.transform = 'translateY(0)';
+  });
+  
+  clearButton.addEventListener('click', () => {
+    if (window.picksyAI && window.picksyAI.clearConversationHistory) {
+      const response = window.picksyAI.clearConversationHistory();
+      showMascotMessage(response);
+      conversationMode = false;
+    } else {
+      showMascotMessage("I've cleared our conversation. What would you like to talk about now?");
+    }
+  });
+  
+  // Add the button to the container
+  controlsContainer.appendChild(clearButton);
+  
+  // Find an appropriate place in the UI to add the controls
+  const inputContainer = document.querySelector('.chat-input');
+  if (inputContainer) {
+    inputContainer.parentNode.insertBefore(controlsContainer, inputContainer);
+  }
+}
+
+/**
+ * Set up microphone for rhythm analysis
+ */
+function setupMicrophoneInput() {
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    // Just prepare the interface elements for now
+    const micInfo = document.querySelector('.mic-info .value');
+    if (micInfo) {
+      micInfo.textContent = "Click to enable";
+      
+      micInfo.addEventListener('click', () => {
+        requestMicrophoneAccess();
+      });
+    }
+  }
+}
+
+/**
+ * Request microphone access
+ */
+async function requestMicrophoneAccess() {
+  try {
+    const micInfo = document.querySelector('.mic-info .value');
+    
+    if (micInfo) {
+      micInfo.textContent = "Requesting...";
+    }
+    
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    
+    // Set up audio processing
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    const analyser = audioContext.createAnalyser();
+    const microphone = audioContext.createMediaStreamSource(stream);
+    microphone.connect(analyser);
+    
+    // Configure analyser
+    analyser.fftSize = 256;
+    const bufferLength = analyser.frequencyBinCount;
+    const dataArray = new Uint8Array(bufferLength);
+    
+    // Update the waveform visualization
+    const waveform = document.querySelector('.waveform');
+    
+    if (waveform) {
+      // Clear existing waveform content except the grid and mic info
+      const existingGrid = waveform.querySelector('.grid');
+      const existingMicInfo = waveform.querySelector('.mic-info');
+      
+      waveform.innerHTML = '';
+      
+      if (existingGrid) {
+        waveform.appendChild(existingGrid);
+      }
+      
+      if (existingMicInfo) {
+        waveform.appendChild(existingMicInfo);
+      }
+      
+      // Create the waveform bars
+      const waveformContainer = document.createElement('div');
+      waveformContainer.className = 'waveform-bars';
+      
+      for (let i = 0; i < bufferLength; i++) {
+        const bar = document.createElement('div');
+        bar.className = 'waveform-bar';
+        waveformContainer.appendChild(bar);
+      }
+      
+      waveform.appendChild(waveformContainer);
+      
+      // Add waveform styles
+      const style = document.createElement('style');
+      style.textContent = `
+        .waveform-bars {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: flex-end;
+          justify-content: space-between;
+          padding: 0 10px;
+          box-sizing: border-box;
+          z-index: 1;
+        }
+        
+        .waveform-bar {
+          width: 4px;
+          background-color: rgba(255, 255, 255, 0.7);
+          border-radius: 2px;
+          height: 5px;
+          transition: height 0.05s ease;
+        }
+      `;
+      document.head.appendChild(style);
+      
+      // Update mic info
+      if (micInfo) {
+        micInfo.textContent = "Active";
+      }
+      
+      // Start updating waveform
+      updateWaveform();
+      
+      function updateWaveform() {
+        requestAnimationFrame(updateWaveform);
+        
+        analyser.getByteFrequencyData(dataArray);
+        
+        const bars = document.querySelectorAll('.waveform-bar');
+        const average = Array.from(dataArray).reduce((sum, value) => sum + value, 0) / dataArray.length;
+        
+        // Update mic value with the average level
+        if (micInfo) {
+          micInfo.textContent = Math.round(average);
+        }
+        
+        for (let i = 0; i < bars.length; i++) {
+          const index = Math.floor(i * (dataArray.length / bars.length));
+          const value = dataArray[index];
+          const height = (value / 255) * 100;
+          bars[i].style.height = `${height}%`;
+        }
+      }
+    }
+    
+  } catch (error) {
+    console.error('Error accessing microphone:', error);
+    
+    const micInfo = document.querySelector('.mic-info .value');
+    if (micInfo) {
+      micInfo.textContent = "Access denied";
+    }
+  }
 }
 
 /**
  * Initialize AI system with loading animation
  */
 async function initializeAI() {
+  console.log("Initializing AI system...");
+  
   // Create loading overlay
   const overlay = document.createElement('div');
   overlay.className = 'ai-loading-overlay';
@@ -84,7 +292,7 @@ async function initializeAI() {
       border-radius: 24px;
       padding: 30px;
       text-align: center;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.2);
       max-width: 90%;
       width: 300px;
     }
@@ -173,6 +381,15 @@ async function initializeAI() {
       50% { opacity: 1; }
       100% { opacity: 0.6; }
     }
+    
+    .user-typing-indicator {
+      position: absolute;
+      bottom: 65px;
+      left: 20px;
+      font-size: 12px;
+      color: var(--purple-dark);
+      opacity: 0.7;
+    }
   `;
   document.head.appendChild(style);
   
@@ -189,6 +406,8 @@ async function initializeAI() {
   try {
     // Check if picksyAI is available
     if (window.picksyAI && typeof window.picksyAI.initModels === 'function') {
+      console.log("PicksyAI found, initializing models...");
+      
       // Setup progress tracking
       let lastProgress = 0;
       
@@ -202,7 +421,9 @@ async function initializeAI() {
       };
       
       // Try to initialize the models with progress tracking
-      window.picksyAI.onProgress = progressCallback;
+      if (window.picksyAI.onProgress) {
+        window.picksyAI.onProgress = progressCallback;
+      }
       
       // Simulate progress for better UX (even if we don't get real progress)
       let simulatedProgress = 0;
@@ -216,7 +437,13 @@ async function initializeAI() {
       simulateProgress();
       
       // Initialize models
-      const result = await window.picksyAI.initModels();
+      let result = false;
+      try {
+        result = await window.picksyAI.initModels();
+        console.log("Model initialization result:", result);
+      } catch (modelError) {
+        console.error("Error initializing models:", modelError);
+      }
       
       // Complete progress to 100%
       progressCallback(100);
@@ -258,6 +485,21 @@ async function initializeAI() {
       setTimeout(() => {
         document.body.removeChild(overlay);
       }, 500);
+      
+      // Create a basic implementation of picksyAI if not available
+      if (!window.picksyAI) {
+        console.log("Creating fallback picksyAI object");
+        window.picksyAI = {
+          generateResponse: function(input) {
+            return Promise.resolve(getQuickResponse(input));
+          },
+          initModels: function() {
+            return Promise.resolve(false);
+          },
+          isReady: false,
+          isLoading: false
+        };
+      }
     }
   } catch (error) {
     console.error('Error initializing AI:', error);
@@ -269,19 +511,89 @@ async function initializeAI() {
     setTimeout(() => {
       document.body.removeChild(overlay);
     }, 500);
+    
+    // Create a basic implementation of picksyAI if not available
+    if (!window.picksyAI) {
+      console.log("Creating fallback picksyAI object after error");
+      window.picksyAI = {
+        generateResponse: function(input) {
+          return Promise.resolve(getQuickResponse(input));
+        },
+        initModels: function() {
+          return Promise.resolve(false);
+        },
+        isReady: false,
+        isLoading: false
+      };
+    }
   }
+}
+
+/**
+ * Generate quick response without using AI models
+ */
+function getQuickResponse(input) {
+  const lowerInput = input.toLowerCase();
+  
+  // Handle special commands
+  if (lowerInput === 'clear' || lowerInput === 'clear chat' || lowerInput === 'start over') {
+    return "I've cleared our conversation. What would you like to talk about now?";
+  }
+  
+  // Check for keywords
+  if (lowerInput.includes('improve') || lowerInput.includes('better')) {
+    return "To improve your rhythm, try counting out loud while you practice. Start slowly and gradually increase your speed.";
+  }
+  
+  if (lowerInput.includes('rhythm') || lowerInput.includes('beat')) {
+    return "Rhythm is the pattern of sounds and silences in music. It's like the heartbeat that keeps everything together!";
+  }
+  
+  if (lowerInput.includes('mistake') || lowerInput.includes('wrong')) {
+    return "Everyone makes mistakes when learning rhythm! Try breaking the pattern into smaller parts and practice each section.";
+  }
+  
+  if (lowerInput.includes('practice') || lowerInput.includes('learn')) {
+    return "Regular practice is key to improving rhythm. Even just 10 minutes a day makes a big difference!";
+  }
+  
+  if (lowerInput.includes('hard') || lowerInput.includes('difficult')) {
+    return "Rhythm can be challenging at first. Try tapping your foot while you practice to help maintain a steady beat.";
+  }
+  
+  if (lowerInput.includes('time') || lowerInput.includes('timing')) {
+    return "Good timing comes from practice. Try using a metronome or clapping along with your favorite songs to develop your sense of rhythm.";
+  }
+  
+  // Default response
+  return "Keep practicing your rhythm skills regularly! I'm here to help you improve.";
 }
 
 /**
  * Set up the chat interface
  */
 function setupChatInterface() {
+  console.log("Setting up chat interface...");
   const userInput = document.querySelector('#user-input');
   const sendButton = document.querySelector('.send-button');
+  const inputContainer = document.querySelector('.input-container');
   
   if (userInput && sendButton) {
+    console.log("Found input and send button, attaching handlers");
+    
+    // Add typing indicator
+    const typingIndicator = document.createElement('div');
+    typingIndicator.className = 'user-typing-indicator';
+    typingIndicator.textContent = 'Picksy is thinking...';
+    typingIndicator.style.display = 'none';
+    
+    if (inputContainer) {
+      inputContainer.appendChild(typingIndicator);
+    }
+    
     // Send message on button click
     sendButton.addEventListener('click', () => {
+      console.log("Send button clicked, processing:", !isProcessing, "Input:", userInput.value.trim());
       if (!isProcessing && userInput.value.trim()) {
         handleUserMessage(userInput.value.trim());
         userInput.value = '';
@@ -291,10 +603,48 @@ function setupChatInterface() {
     // Send message on Enter key
     userInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter' && !isProcessing && userInput.value.trim()) {
+        console.log("Enter pressed, sending message");
         handleUserMessage(userInput.value.trim());
         userInput.value = '';
       }
     });
+    
+    // Add "thinking" indicator when user is typing
+    userInput.addEventListener('input', () => {
+      if (userInput.value.trim() && !awaitingResponse) {
+        // Clear existing timer
+        if (typingTimer) {
+          clearTimeout(typingTimer);
+        }
+        
+        // Set new timer to show thinking indicator
+        typingTimer = setTimeout(() => {
+          typingIndicator.style.display = 'block';
+          typingIndicator.textContent = 'Picksy is thinking...';
+          
+          // Hide after 2 seconds
+          setTimeout(() => {
+            typingIndicator.style.display = 'none';
+          }, 2000);
+        }, 1000);
+      } else {
+        // Clear timer if input is empty
+        if (typingTimer) {
+          clearTimeout(typingTimer);
+          typingTimer = null;
+        }
+        
+        typingIndicator.style.display = 'none';
+      }
+    });
+    
+    // Make sure buttons are enabled
+    sendButton.disabled = false;
+    userInput.disabled = false;
+  } else {
+    console.error("Could not find input or send button!");
+    if (!userInput) console.error("User input element not found");
+    if (!sendButton) console.error("Send button not found");
   }
 }
 
@@ -302,10 +652,31 @@ function setupChatInterface() {
  * Process user message and get AI feedback
  */
 async function handleUserMessage(message) {
-  if (isProcessing) return;
+  console.log("Handling user message:", message);
+  
+  if (isProcessing) {
+    console.log("Already processing a message, ignoring");
+    return;
+  }
+  
   isProcessing = true;
+  awaitingResponse = true;
+  console.log("isProcessing set to true");
+  conversationMode = true; // Enable conversation mode when user sends a message
   
   try {
+    // Special command: clear conversation
+    if (message.toLowerCase() === 'clear' || message.toLowerCase() === 'clear conversation') {
+      if (window.picksyAI && window.picksyAI.clearConversationHistory) {
+        const response = window.picksyAI.clearConversationHistory();
+        showMascotMessage(response);
+        isProcessing = false;
+        awaitingResponse = false;
+        conversationMode = false;
+        return;
+      }
+    }
+    
     // Show analyzing indicator
     showTypingIndicator('Analyzing');
     
@@ -315,14 +686,38 @@ async function handleUserMessage(message) {
         // Change to thinking status
         showTypingIndicator('Thinking');
         
+        console.log("Generating response for:", message);
+        
+        // Make sure picksyAI exists
+        if (!window.picksyAI || !window.picksyAI.generateResponse) {
+          console.error("picksyAI not available, using fallback");
+          hideTypingIndicator();
+          showMascotResponse(getQuickResponse(message));
+          isProcessing = false;
+          awaitingResponse = false;
+          return;
+        }
+        
         // Get response from enhanced AI
-        const response = await window.picksyAI.generateResponse(message);
+        let response;
+        try {
+          response = await window.picksyAI.generateResponse(message);
+          console.log("Response received:", response);
+        } catch (aiError) {
+          console.error("Error from picksyAI:", aiError);
+          response = getQuickResponse(message);
+        }
         
         // Hide typing indicator
         hideTypingIndicator();
         
-        // Show mascot response
-        showMascotResponse(response);
+        // Show mascot response with a slight delay for realism
+        setTimeout(() => {
+          showMascotResponse(response);
+          isProcessing = false;
+          awaitingResponse = false;
+        }, 300);
+        
       } catch (error) {
         console.error('Error getting AI response:', error);
         
@@ -332,8 +727,9 @@ async function handleUserMessage(message) {
         // Show fallback response
         const fallback = "I'm having a bit of trouble with my thinking cap right now. Try asking about specific rhythm techniques you want to improve!";
         showMascotResponse(fallback);
-      } finally {
+        console.log("Setting isProcessing to false");
         isProcessing = false;
+        awaitingResponse = false;
       }
     }, 600); // Short delay to show the analyzing state
     
@@ -346,7 +742,9 @@ async function handleUserMessage(message) {
     // Show fallback response
     const fallback = "I'm having a bit of trouble with my thinking cap right now. Try asking about specific rhythm techniques you want to improve!";
     showMascotResponse(fallback);
+    console.log("Setting isProcessing to false after error");
     isProcessing = false;
+    awaitingResponse = false;
   }
 }
 
@@ -355,7 +753,10 @@ async function handleUserMessage(message) {
  */
 function showTypingIndicator(status = 'Thinking') {
   const chatBubble = document.querySelector('.chat-bubble p');
-  if (!chatBubble) return;
+  if (!chatBubble) {
+    console.error("Chat bubble not found!");
+    return;
+  }
   
   chatBubble.innerHTML = `${status} <span class='typing-dots'></span>`;
   
@@ -397,12 +798,21 @@ function setupMascot() {
     mascot.addEventListener('click', () => {
       if (isProcessing) return;
       
-      // Animate mascot
-      animateMascot();
-      
-      // Get rhythm tip
-      handleRhythmTip();
+      // Only get random tip if not in conversation mode
+      if (!conversationMode) {
+        // Animate mascot
+        animateMascot();
+        
+        // Get rhythm tip
+        handleRhythmTip();
+      } else {
+        // If in conversation mode, suggest continuing the conversation
+        animateMascot();
+        showMascotMessage("Do you have any more questions about rhythm or music practice? I'm here to help!");
+      }
     });
+  } else {
+    console.error("Mascot element not found!");
   }
 }
 
@@ -427,7 +837,10 @@ function animateMascot() {
  */
 function showMascotMessage(message) {
   const chatBubble = document.querySelector('.chat-bubble p');
-  if (!chatBubble) return;
+  if (!chatBubble) {
+    console.error("Chat bubble not found!");
+    return;
+  }
   
   // Fade out
   chatBubble.style.opacity = '0';
@@ -445,6 +858,12 @@ function showMascotMessage(message) {
 function showMascotResponse(message) {
   showMascotMessage(message);
   animateMascot();
+  
+  // Update progress based on context
+  if (conversationMode && Math.random() > 0.7) {
+    // Sometimes update progress during conversations to give sense of advancement
+    updateProgress(Math.floor(Math.random() * 5) + 3);
+  }
 }
 
 /**
@@ -478,7 +897,17 @@ async function handleRhythmTip() {
     const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
     
     // Get tip from AI
-    const tip = await window.picksyAI.generateResponse(randomPrompt);
+    let tip;
+    try {
+      if (window.picksyAI && window.picksyAI.generateResponse) {
+        tip = await window.picksyAI.generateResponse(randomPrompt);
+      } else {
+        tip = getQuickResponse(randomPrompt);
+      }
+    } catch (error) {
+      console.error("Error getting tip:", error);
+      tip = getQuickResponse(randomPrompt);
+    }
     
     // Hide typing indicator
     hideTypingIndicator();
@@ -518,9 +947,16 @@ function setupRatingButtons() {
       // Update progress
       updateProgress(15);
       
-      // Get positive feedback
-      handleFeedbackRequest(true);
+      // Get positive feedback if not in conversation mode
+      // If in conversation mode, integrate with conversation
+      if (conversationMode) {
+        handleUserMessage("That was helpful, thanks!");
+      } else {
+        handleFeedbackRequest(true);
+      }
     });
+  } else {
+    console.error("Thumb up button not found!");
   }
   
   if (thumbDown) {
@@ -533,9 +969,16 @@ function setupRatingButtons() {
         this.style.transform = 'scale(1)';
       }, 200);
       
-      // Get improvement feedback
-      handleFeedbackRequest(false);
+      // Get improvement feedback if not in conversation mode
+      // If in conversation mode, integrate with conversation
+      if (conversationMode) {
+        handleUserMessage("I'm still having trouble understanding. Can you explain differently?");
+      } else {
+        handleFeedbackRequest(false);
+      }
     });
+  } else {
+    console.error("Thumb down button not found!");
   }
 }
 
@@ -578,7 +1021,17 @@ async function handleFeedbackRequest(isPositive) {
         showTypingIndicator('Thinking');
         
         // Get response from AI
-        const response = await window.picksyAI.generateResponse(prompt);
+        let response;
+        try {
+          if (window.picksyAI && window.picksyAI.generateResponse) {
+            response = await window.picksyAI.generateResponse(prompt);
+          } else {
+            response = getQuickResponse(prompt);
+          }
+        } catch (error) {
+          console.error("Error getting feedback:", error);
+          response = getQuickResponse(prompt);
+        }
         
         // Hide typing indicator
         hideTypingIndicator();
@@ -623,7 +1076,10 @@ async function handleFeedbackRequest(isPositive) {
  */
 function updateProgress(amount) {
   const progressBar = document.querySelector('.progress');
-  if (!progressBar) return;
+  if (!progressBar) {
+    console.error("Progress bar not found!");
+    return;
+  }
   
   // Get current width
   const currentWidth = parseInt(progressBar.style.width || '0');
@@ -634,6 +1090,20 @@ function updateProgress(amount) {
   // Update width with transition
   progressBar.style.transition = 'width 0.5s ease-in-out';
   progressBar.style.width = `${newWidth}%`;
+  
+  // Update counter in header
+  const counter = document.querySelector('.counter');
+  if (counter) {
+    // Random score between 30-50 based on progress
+    const score = Math.floor(30 + (newWidth / 100) * 20);
+    counter.textContent = score;
+    
+    // Animate counter update
+    counter.style.transform = 'scale(1.2)';
+    setTimeout(() => {
+      counter.style.transform = 'scale(1)';
+    }, 300);
+  }
   
   // Celebrate if reaching 100%
   if (newWidth >= 100) {
@@ -652,6 +1122,8 @@ async function celebrateProgress() {
     setTimeout(() => {
       trophy.style.animation = 'bounce 0.5s 5 alternate';
     }, 10);
+  } else {
+    console.error("Trophy element not found!");
   }
   
   // Add bounce animation style if needed
@@ -692,15 +1164,44 @@ async function celebrateProgress() {
     showTypingIndicator('Celebrating');
     
     setTimeout(async () => {
-      const response = await window.picksyAI.generateResponse(prompt);
+      let response;
+      try {
+        if (window.picksyAI && window.picksyAI.generateResponse) {
+          response = await window.picksyAI.generateResponse(prompt);
+        } else {
+          response = "Congratulations! You've completed this level and you're making great progress!";
+        }
+      } catch (error) {
+        console.error("Error getting celebration message:", error);
+        response = "Congratulations! You've completed this level and you're making great progress!";
+      }
+      
       showMascotResponse(response);
       isProcessing = false;
+      
+      // Update level
+      updateLevel();
+      
     }, 600);
     
   } catch (error) {
     console.error('Error getting celebration message:', error);
     showMascotMessage("Congratulations! You've completed this level!");
     isProcessing = false;
+    
+    // Update level
+    updateLevel();
+  }
+  
+  // Update attempt history
+  const attemptsList = document.querySelector('.attempts-history ul');
+  if (attemptsList) {
+    const currentLevel = document.querySelector('.level-value')?.textContent || '1/5';
+    const currentLevelNum = parseInt(currentLevel) || 1;
+    
+    const newAttempt = document.createElement('li');
+    newAttempt.textContent = `Level ${currentLevelNum}: %${Math.floor(85 + Math.random() * 15)}`;
+    attemptsList.appendChild(newAttempt);
   }
   
   // Reset progress after delay
@@ -716,4 +1217,31 @@ async function celebrateProgress() {
       }, 50);
     }
   }, 5000);
+}
+
+/**
+ * Update level after completing a level
+ */
+function updateLevel() {
+  const levelValue = document.querySelector('.level-value');
+  if (!levelValue) return;
+  
+  const currentLevel = levelValue.textContent;
+  const match = currentLevel.match(/(\d+)\/(\d+)/);
+  
+  if (match) {
+    const level = parseInt(match[1]);
+    const total = parseInt(match[2]);
+    
+    const newLevel = Math.min(level + 1, total);
+    levelValue.textContent = `${newLevel}/${total}`;
+    
+    // Animate level update
+    levelValue.style.transform = 'scale(1.3)';
+    levelValue.style.color = 'var(--green)';
+    setTimeout(() => {
+      levelValue.style.transform = 'scale(1)';
+      levelValue.style.color = 'var(--purple-dark)';
+    }, 800);
+  }
 }
