@@ -141,6 +141,9 @@ class PicksyApp {
 
     // Setup past button to show reviews
     this.setupPastButton();
+
+    // Setup feedback button to show feedback view
+    this.setupFeedbackButton();
   }
       
   /**
@@ -152,6 +155,122 @@ class PicksyApp {
       pastButton.addEventListener('click', () => {
         this.components.navigation.showReviewsView();
       });
+    }
+  }
+
+  /**
+   * Setup feedback button to navigate to feedback view
+   */
+  setupFeedbackButton() {
+    const feedbackButton = document.getElementById('feedback-toggle');
+    if (feedbackButton) {
+      feedbackButton.addEventListener('click', () => {
+        this.components.navigation.showFeedbackView();
+        this.updateFeedbackView();
+      });
+    }
+
+    // Setup generate feedback button
+    const generateButton = document.getElementById('generate-feedback-button');
+    if (generateButton) {
+      generateButton.addEventListener('click', () => {
+        this.generateAIFeedback();
+      });
+    }
+  }
+
+  /**
+   * Update feedback view with current data
+   */
+  updateFeedbackView() {
+    // Update study record stats
+    if (this.models.progress) {
+      const levelEl = document.getElementById('stat-level');
+      const scoreEl = document.getElementById('stat-score');
+      const bestEl = document.getElementById('stat-best');
+      
+      if (levelEl) levelEl.textContent = this.models.progress.getLevel();
+      if (scoreEl) scoreEl.textContent = `${this.models.progress.getScore()}%`;
+      
+      // Get best score from reviews
+      const reviews = this.models.review ? this.models.review.getReviews() : [];
+      const bestScore = reviews.length > 0 
+        ? Math.max(...reviews.map(r => parseInt(r.score) || 0))
+        : this.models.progress.getScore();
+      if (bestEl) bestEl.textContent = `${bestScore}%`;
+    }
+
+    // Update sessions count
+    const sessionsEl = document.getElementById('stat-sessions');
+    if (sessionsEl) {
+      const reviews = this.models.review ? this.models.review.getReviews() : [];
+      sessionsEl.textContent = reviews.length || 0;
+    }
+
+    // Load saved user name
+    const userNameInput = document.getElementById('user-name-input');
+    if (userNameInput) {
+      const savedName = this.services.storage.loadUserName();
+      if (savedName) {
+        userNameInput.value = savedName;
+      }
+    }
+  }
+
+  /**
+   * Generate AI feedback based on user's progress
+   */
+  async generateAIFeedback() {
+    const generateButton = document.getElementById('generate-feedback-button');
+    const improvementContent = document.getElementById('improvement-content');
+    
+    if (!generateButton || !improvementContent) return;
+
+    // Disable button during generation
+    generateButton.disabled = true;
+    generateButton.textContent = 'Generating...';
+
+    // Get user data
+    const userNameInput = document.getElementById('user-name-input');
+    const userName = userNameInput ? userNameInput.value.trim() || 'Student' : 'Student';
+    
+    // Save user name
+    if (userNameInput && userNameInput.value.trim()) {
+      this.services.storage.saveUserName(userNameInput.value.trim());
+    }
+
+    // Get progress data
+    const level = this.models.progress ? this.models.progress.getLevel() : 1;
+    const score = this.models.progress ? this.models.progress.getScore() : 0;
+    const reviews = this.models.review ? this.models.review.getReviews() : [];
+    const bestScore = reviews.length > 0 
+      ? Math.max(...reviews.map(r => parseInt(r.score) || 0))
+      : score;
+    const sessions = reviews.length;
+
+    // Build prompt for AI feedback
+    const prompt = `You are Picksy, a friendly music teacher. Provide personalized feedback for ${userName}.
+
+Study Record:
+- Current Level: ${level}/5
+- Current Score: ${score}%
+- Best Score: ${bestScore}%
+- Total Practice Sessions: ${sessions}
+
+Provide encouraging, specific feedback in 3-4 sentences. Highlight their progress, mention what they're doing well, and give one clear tip to improve. Use simple, positive language.`;
+
+    try {
+      improvementContent.innerHTML = '<p class="improvement-placeholder">Generating feedback...</p>';
+      
+      const feedback = await this.services.ai.generateResponse(prompt);
+      
+      improvementContent.innerHTML = `<p class="improvement-feedback">${feedback}</p>`;
+    } catch (error) {
+      console.error('Error generating feedback:', error);
+      improvementContent.innerHTML = `<p class="improvement-feedback">Great job practicing, ${userName}! You're on level ${level} with a score of ${score}%. Keep practicing regularly to improve your rhythm skills. Try counting out loud while you practice to maintain a steady beat!</p>`;
+    } finally {
+      generateButton.disabled = false;
+      generateButton.textContent = 'Generate Feedback';
     }
   }
 
