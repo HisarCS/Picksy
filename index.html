@@ -33,6 +33,7 @@
                 <div class="header-buttons">
                     <button class="past-toggle" id="past-toggle">Reviews</button>
                     <button class="chat-toggle" id="chat-toggle">Chat</button>
+                    <button class="feedback-toggle" id="feedback-toggle">AI Feedback</button>
                 </div>
             </div>
             
@@ -109,6 +110,55 @@
                         </div>
                         <div class="review-date">2023-07-09</div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Feedback View (Hidden by default) -->
+    <div class="app-container feedback-view" id="feedback-view" style="display: none;">
+        <div class="panel feedback-panel-full">
+            <div class="panel-header">
+                <button class="back-button" id="feedback-back-button">Back</button>
+                <h1 class="logo">AI Feedback</h1>
+            </div>
+            
+            <div class="feedback-content-full">
+                <div class="feedback-user-info">
+                    <div class="feedback-user-name">
+                        <label>Name:</label>
+                        <input type="text" id="user-name-input" placeholder="Enter your name" class="feedback-input">
+                    </div>
+                </div>
+                
+                <div class="feedback-study-record">
+                    <h3>Study Record</h3>
+                    <div class="study-record-stats" id="study-record-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">Current Level:</span>
+                            <span class="stat-value" id="stat-level">1</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Current Score:</span>
+                            <span class="stat-value" id="stat-score">0%</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Total Sessions:</span>
+                            <span class="stat-value" id="stat-sessions">0</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Best Score:</span>
+                            <span class="stat-value" id="stat-best">0%</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="feedback-improvement">
+                    <h3>Improvement Result</h3>
+                    <div class="improvement-content" id="improvement-content">
+                        <p class="improvement-placeholder">Click "Generate Feedback" to get AI-powered improvement suggestions based on your practice record.</p>
+                    </div>
+                    <button class="generate-feedback-button" id="generate-feedback-button">Generate Feedback</button>
                 </div>
             </div>
         </div>
